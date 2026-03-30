@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -20,6 +21,10 @@ export default function LoginPage() {
   const router = useRouter();
   const login = useLogin();
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({ resolver: zodResolver(schema) });
+
+  useEffect(() => {
+    if (localStorage.getItem("access_token")) router.replace("/dashboard");
+  }, [router]);
 
   const onSubmit = async (data: FormData) => {
     try {

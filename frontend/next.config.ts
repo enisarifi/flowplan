@@ -11,6 +11,7 @@ const nextConfig: NextConfig = {
       "@fullcalendar/daygrid",
       "@fullcalendar/timegrid",
       "@fullcalendar/interaction",
+      "recharts",
     ],
   },
   async rewrites() {
