@@ -24,6 +24,15 @@ class PreferencesUpdate(BaseModel):
     break_len_min: Optional[int] = None
     study_days: Optional[list[str]] = None
     timezone: Optional[str] = None
+    blocked_hours_start: Optional[str] = None
+    blocked_hours_end: Optional[str] = None
+    max_sessions_per_day: Optional[int] = None
+    min_break_between_min: Optional[int] = None
+    pomodoro_work_min: Optional[int] = None
+    pomodoro_break_min: Optional[int] = None
+    sound_enabled: Optional[bool] = None
+    calendar_default_view: Optional[str] = None
+    compact_mode: Optional[bool] = None
 
 
 class PreferencesResponse(BaseModel):
@@ -35,5 +44,14 @@ class PreferencesResponse(BaseModel):
     break_len_min: int
     study_days: list[str]
     timezone: str
+    blocked_hours_start: str
+    blocked_hours_end: str
+    max_sessions_per_day: int
+    min_break_between_min: int
+    pomodoro_work_min: int
+    pomodoro_break_min: int
+    sound_enabled: bool
+    calendar_default_view: str
+    compact_mode: bool
 
     model_config = {"from_attributes": True}

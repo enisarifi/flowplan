@@ -1,12 +1,13 @@
 import uuid
-from fastapi import APIRouter, Depends
+from typing import Optional
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.user import User
 from app.services.session_service import SessionService
-from app.schemas.feedback import SessionCompleteRequest, FeedbackResponse, SessionStatsResponse
+from app.schemas.feedback import SessionCompleteRequest, FeedbackResponse, SessionStatsResponse, SubjectStatsItem, WeeklySummaryResponse, WeeklyTrendItem, EnergyHeatmapItem, HistoryDayItem
 
 router = APIRouter()
 
@@ -40,3 +41,45 @@ async def get_stats(
     service: SessionService = Depends(get_session_service),
 ):
     return await service.get_stats(current_user.id)
+
+
+@router.get("/stats/subjects", response_model=list[SubjectStatsItem])
+async def get_subject_stats(
+    current_user: User = Depends(get_current_user),
+    service: SessionService = Depends(get_session_service),
+):
+    return await service.get_subject_stats(current_user.id)
+
+
+@router.get("/weekly-summary", response_model=WeeklySummaryResponse)
+async def get_weekly_summary(
+    current_user: User = Depends(get_current_user),
+    service: SessionService = Depends(get_session_service),
+):
+    return await service.get_weekly_summary(current_user.id)
+
+
+@router.get("/analytics/weekly-trend", response_model=list[WeeklyTrendItem])
+async def get_weekly_trend(
+    current_user: User = Depends(get_current_user),
+    service: SessionService = Depends(get_session_service),
+):
+    return await service.get_weekly_trend(current_user.id)
+
+
+@router.get("/analytics/energy-heatmap", response_model=list[EnergyHeatmapItem])
+async def get_energy_heatmap(
+    current_user: User = Depends(get_current_user),
+    service: SessionService = Depends(get_session_service),
+):
+    return await service.get_energy_heatmap(current_user.id)
+
+
+@router.get("/history", response_model=list[HistoryDayItem])
+async def get_history(
+    days: int = Query(28, le=365),
+    subject_id: Optional[uuid.UUID] = Query(None),
+    current_user: User = Depends(get_current_user),
+    service: SessionService = Depends(get_session_service),
+):
+    return await service.get_history(current_user.id, days, subject_id)

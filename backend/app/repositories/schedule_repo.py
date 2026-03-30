@@ -31,8 +31,6 @@ class ScheduleRepository(BaseRepository[ScheduleEntry]):
         for entry in entries:
             self.db.add(entry)
         await self.db.commit()
-        for entry in entries:
-            await self.db.refresh(entry)
         return entries
 
     async def delete_future_planned(self, user_id: uuid.UUID, from_time: datetime) -> int:
@@ -82,6 +80,16 @@ class ScheduleRepository(BaseRepository[ScheduleEntry]):
 
     async def get_all_entries_for_stats(self, user_id: uuid.UUID) -> list[ScheduleEntry]:
         result = await self.db.execute(
-            select(ScheduleEntry).where(ScheduleEntry.user_id == user_id)
+            select(ScheduleEntry)
+            .options(selectinload(ScheduleEntry.subject))
+            .where(ScheduleEntry.user_id == user_id)
+        )
+        return list(result.scalars().all())
+
+    async def get_entries_with_subjects(self, user_id: uuid.UUID) -> list[ScheduleEntry]:
+        result = await self.db.execute(
+            select(ScheduleEntry)
+            .options(selectinload(ScheduleEntry.subject))
+            .where(ScheduleEntry.user_id == user_id)
         )
         return list(result.scalars().all())

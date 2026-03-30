@@ -1,7 +1,7 @@
 import json
 from datetime import datetime, date, timedelta, timezone
 
-from openai import OpenAI  # used for Gemini via OpenAI-compatible endpoint
+from openai import AsyncOpenAI
 from pydantic import ValidationError
 
 from app.config import settings
@@ -23,9 +23,10 @@ SYSTEM_PROMPT = (
 
 class AIService:
     def __init__(self):
-        self.client = OpenAI(
+        self.client = AsyncOpenAI(
             api_key=settings.OPENAI_API_KEY,
             base_url="https://api.groq.com/openai/v1",
+            timeout=30.0,
         )
         self.model = settings.OPENAI_MODEL
 
@@ -67,7 +68,9 @@ class AIService:
 {chr(10).join(subject_lines)}
 
 ## Constraints
-- Do not schedule sessions before 07:00 or after 23:00 in the user's timezone.
+- Do not schedule sessions before {prefs.blocked_hours_end} or after {prefs.blocked_hours_start} in the user's timezone.
+- Schedule no more than {prefs.max_sessions_per_day} sessions per day.
+- Leave at least {prefs.min_break_between_min} minutes between consecutive sessions.
 - Sessions for difficulty-5 subjects should be placed at the user's energy peak time.
 - If an exam is within 7 days, increase that subject's session frequency.
 - Leave at least one full day without sessions if total weekly hours target is under 10h.
@@ -145,8 +148,8 @@ Respond with the same JSON schema as before."""
 
         return base + behavioral_section
 
-    def _call_openai(self, user_prompt: str) -> tuple[str, int, int]:
-        response = self.client.chat.completions.create(
+    async def _call_openai(self, user_prompt: str) -> tuple[str, int, int]:
+        response = await self.client.chat.completions.create(
             model=self.model,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
@@ -180,15 +183,15 @@ Respond with the same JSON schema as before."""
 
         return parsed
 
-    def generate_schedule(
+    async def generate_schedule(
         self, prefs: UserPreferences, subjects: list[Subject], start_date: date | None = None
     ) -> tuple[AIScheduleResponseSchema, int, int]:
         prompt = self.build_generation_prompt(prefs, subjects, start_date)
-        raw, prompt_tokens, completion_tokens = self._call_openai(prompt)
+        raw, prompt_tokens, completion_tokens = await self._call_openai(prompt)
         parsed = self._parse_and_validate(raw, subjects)
         return parsed, prompt_tokens, completion_tokens
 
-    def adapt_schedule(
+    async def adapt_schedule(
         self,
         prefs: UserPreferences,
         subjects: list[Subject],
@@ -196,6 +199,30 @@ Respond with the same JSON schema as before."""
         start_date: date | None = None,
     ) -> tuple[AIScheduleResponseSchema, int, int]:
         prompt = self.build_adaptation_prompt(prefs, subjects, feedback_rows, start_date)
-        raw, prompt_tokens, completion_tokens = self._call_openai(prompt)
+        raw, prompt_tokens, completion_tokens = await self._call_openai(prompt)
         parsed = self._parse_and_validate(raw, subjects)
         return parsed, prompt_tokens, completion_tokens
+
+    async def generate_weekly_summary(self, stats_text: str) -> dict:
+        prompt = f"""Analyze this student's study week and give a brief, encouraging summary.
+
+{stats_text}
+
+Respond with strict JSON:
+{{
+  "summary": "2-3 sentence overview of the week (encouraging tone, mention specific subjects)",
+  "tips": ["tip 1", "tip 2", "tip 3"]
+}}
+
+Tips should be specific and actionable based on the data. Keep them short (1 sentence each)."""
+
+        response = await self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": "You are a supportive study coach. Be specific, concise, and encouraging."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.7,
+            response_format={"type": "json_object"},
+        )
+        return json.loads(response.choices[0].message.content)

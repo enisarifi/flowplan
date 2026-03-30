@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
-import { ScheduleEntry, SessionFeedback, SessionStats } from "@/types/api";
+import { ScheduleEntry, SessionFeedback, SessionStats, SubjectStatsItem, WeeklySummary, WeeklyTrendItem, EnergyHeatmapItem, HistoryDay } from "@/types/api";
 
 export const SCHEDULE_KEY = ["schedule"];
 export const STATS_KEY = ["session-stats"];
@@ -93,4 +93,72 @@ export function useSessionStats() {
       return res.data;
     },
   });
+}
+
+export function useSubjectStats() {
+  return useQuery({
+    queryKey: ["subject-stats"],
+    queryFn: async () => {
+      const res = await api.get<SubjectStatsItem[]>("/sessions/stats/subjects");
+      return res.data;
+    },
+  });
+}
+
+export function useWeeklySummary() {
+  return useQuery({
+    queryKey: ["weekly-summary"],
+    queryFn: async () => {
+      const res = await api.get<WeeklySummary>("/sessions/weekly-summary");
+      return res.data;
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+}
+
+export function useWeeklyTrend() {
+  return useQuery({
+    queryKey: ["weekly-trend"],
+    queryFn: async () => {
+      const res = await api.get<WeeklyTrendItem[]>("/sessions/analytics/weekly-trend");
+      return res.data;
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+}
+
+export function useEnergyHeatmap() {
+  return useQuery({
+    queryKey: ["energy-heatmap"],
+    queryFn: async () => {
+      const res = await api.get<EnergyHeatmapItem[]>("/sessions/analytics/energy-heatmap");
+      return res.data;
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+}
+
+export function useStudyHistory(days = 28, subjectId?: string) {
+  return useQuery({
+    queryKey: ["study-history", days, subjectId],
+    queryFn: async () => {
+      const params: Record<string, string> = { days: String(days) };
+      if (subjectId) params.subject_id = subjectId;
+      const res = await api.get<HistoryDay[]>("/sessions/history", { params });
+      return res.data;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+export function useExportIcal() {
+  return async () => {
+    const res = await api.get("/schedule/export/ical", { responseType: "blob" });
+    const url = window.URL.createObjectURL(new Blob([res.data]));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "flowplan-schedule.ics";
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
 }

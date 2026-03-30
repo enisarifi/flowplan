@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from datetime import datetime, timezone, date
 from dateutil import parser as dateutil_parser
@@ -22,11 +23,12 @@ class ScheduleService:
         self.ai_service = AIService()
 
     async def generate(self, user_id: uuid.UUID, start_date_str: str | None = None) -> list[ScheduleEntry]:
-        prefs = await self.user_repo.get_preferences(user_id)
+        prefs, subjects = await asyncio.gather(
+            self.user_repo.get_preferences(user_id),
+            self.subject_repo.get_all_for_user(user_id, active_only=True),
+        )
         if not prefs:
             raise ValueError("User preferences not set. Complete onboarding first.")
-
-        subjects = await self.subject_repo.get_all_for_user(user_id, active_only=True)
         if not subjects:
             raise ValueError("No active subjects found. Add subjects first.")
 
@@ -37,7 +39,7 @@ class ScheduleService:
         today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         await self.schedule_repo.delete_future_planned(user_id, today_start)
 
-        parsed, prompt_tokens, completion_tokens = self.ai_service.generate_schedule(prefs, subjects, start_date)
+        parsed, prompt_tokens, completion_tokens = await self.ai_service.generate_schedule(prefs, subjects, start_date)
 
         log = AIGenerationLog(
             user_id=user_id,
@@ -70,18 +72,19 @@ class ScheduleService:
         return await self.schedule_repo.bulk_insert(entries)
 
     async def adapt(self, user_id: uuid.UUID, start_date_str: str | None = None) -> list[ScheduleEntry]:
-        prefs = await self.user_repo.get_preferences(user_id)
+        prefs, subjects, feedback_rows = await asyncio.gather(
+            self.user_repo.get_preferences(user_id),
+            self.subject_repo.get_all_for_user(user_id, active_only=True),
+            self.schedule_repo.get_feedback_for_user(user_id, limit=50),
+        )
         if not prefs:
             raise ValueError("User preferences not set.")
-
-        subjects = await self.subject_repo.get_all_for_user(user_id, active_only=True)
-        feedback_rows = await self.schedule_repo.get_feedback_for_user(user_id, limit=50)
 
         start_date: date | None = None
         if start_date_str:
             start_date = dateutil_parser.parse(start_date_str).date()
 
-        parsed, prompt_tokens, completion_tokens = self.ai_service.adapt_schedule(
+        parsed, prompt_tokens, completion_tokens = await self.ai_service.adapt_schedule(
             prefs, subjects, feedback_rows, start_date
         )
 

@@ -72,3 +72,48 @@ async def delete_future_schedule(
     from datetime import timezone
     now = datetime.now(timezone.utc)
     await schedule_repo.delete_future_planned(current_user.id, now)
+
+
+@router.get("/export/ical")
+async def export_ical(
+    current_user: User = Depends(get_current_user),
+    schedule_repo: ScheduleRepository = Depends(get_schedule_repo),
+):
+    from fastapi.responses import Response
+    entries = await schedule_repo.get_entries_for_user(current_user.id)
+
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//FlowPlan//Study Schedule//EN",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+        "X-WR-CALNAME:FlowPlan Study Schedule",
+    ]
+
+    for entry in entries:
+        start = entry.start_time.strftime("%Y%m%dT%H%M%SZ")
+        end = entry.end_time.strftime("%Y%m%dT%H%M%SZ")
+        summary = entry.title or "Study Session"
+        description = entry.ai_suggested_topic or ""
+        status_map = {"planned": "TENTATIVE", "completed": "CONFIRMED", "skipped": "CANCELLED"}
+
+        lines.extend([
+            "BEGIN:VEVENT",
+            f"DTSTART:{start}",
+            f"DTEND:{end}",
+            f"SUMMARY:{summary}",
+            f"DESCRIPTION:{description}",
+            f"STATUS:{status_map.get(entry.status, 'TENTATIVE')}",
+            f"UID:{entry.id}@flowplan",
+            "END:VEVENT",
+        ])
+
+    lines.append("END:VCALENDAR")
+    ical_content = "\r\n".join(lines)
+
+    return Response(
+        content=ical_content,
+        media_type="text/calendar",
+        headers={"Content-Disposition": "attachment; filename=flowplan-schedule.ics"},
+    )
