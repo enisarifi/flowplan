@@ -140,6 +140,62 @@ export interface HistoryDay {
   entries: HistoryEntry[];
 }
 
+export interface Goal {
+  id: string;
+  user_id: string;
+  subject_id: string | null;
+  title: string;
+  target_type: "hours" | "sessions" | "completion";
+  target_value: number;
+  current_value: number;
+  deadline: string | null;
+  is_completed: boolean;
+  subject_name: string | null;
+  progress_pct: number;
+  created_at: string;
+}
+
+export interface Resource {
+  id: string;
+  user_id: string;
+  subject_id: string;
+  title: string;
+  url: string;
+  type: "link" | "pdf" | "video" | "textbook";
+  page_ref: string | null;
+  created_at: string;
+}
+
+export interface ExamPrep {
+  subject_name: string;
+  exam_date: string;
+  days_until: number;
+  checklist: string[];
+  daily_hours: number;
+  priority: string;
+  tips: string[];
+}
+
+export interface QuizQuestion {
+  question: string;
+  question_type: "multiple_choice" | "true_false" | "short_answer";
+  options: string[] | null;
+  correct_answer: string;
+  hint: string;
+  explanation: string;
+}
+
+export interface Flashcard {
+  front: string;
+  back: string;
+  mnemonic: string | null;
+}
+
+export interface CheckAnswerResponse {
+  is_correct: boolean;
+  feedback: string;
+}
+
 export interface TokenResponse {
   access_token: string;
   refresh_token: string;

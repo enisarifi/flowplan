@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAppStore } from "@/store/useAppStore";
 import api from "@/lib/api";
 import FloatingTimer from "@/components/study/FloatingTimer";
+import TutorialOverlay from "@/components/layout/TutorialOverlay";
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -52,6 +53,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     <>
       {children}
       <FloatingTimer />
+      <TutorialOverlay />
     </>
   );
 }

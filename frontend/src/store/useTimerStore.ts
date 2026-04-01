@@ -3,6 +3,19 @@ import { ScheduleEntry } from "@/types/api";
 
 export type TimerPhase = "idle" | "queue" | "work" | "feedback" | "break" | "done";
 
+interface TimerSnapshot {
+  phase: TimerPhase;
+  queue: ScheduleEntry[];
+  currentEntry: ScheduleEntry | null;
+  currentIndex: number;
+  secondsLeft: number;
+  isRunning: boolean;
+  sessionWorkedSeconds: number;
+  dailyWorkedSeconds: number;
+  completedToday: string[];
+  breakMinutes: number;
+}
+
 interface TimerState {
   phase: TimerPhase;
   queue: ScheduleEntry[];
@@ -15,6 +28,7 @@ interface TimerState {
   completedToday: string[];
   breakMinutes: number;
   soundEnabled: boolean;
+  _snapshot: TimerSnapshot | null;
 
   // Actions
   loadQueue: (sessions: ScheduleEntry[], breakMin?: number) => void;
@@ -26,6 +40,7 @@ interface TimerState {
   finishFeedback: () => void;
   skipToNext: () => void;
   stopAll: () => { dailyMinutes: number; sessionsCompleted: number };
+  restore: () => void;
   reset: () => void;
 }
 
@@ -56,6 +71,7 @@ export const useTimerStore = create<TimerState>((set, get) => ({
   completedToday: [],
   breakMinutes: 5,
   soundEnabled: true,
+  _snapshot: null,
 
   loadQueue: (sessions, breakMin = 5) => {
     const planned = sessions
@@ -74,6 +90,7 @@ export const useTimerStore = create<TimerState>((set, get) => ({
       isRunning: true,
       sessionWorkedSeconds: 0,
       breakMinutes: breakMin,
+      _snapshot: null,
     });
   },
 
@@ -87,6 +104,7 @@ export const useTimerStore = create<TimerState>((set, get) => ({
       isRunning: true,
       sessionWorkedSeconds: 0,
       breakMinutes: breakMin,
+      _snapshot: null,
     });
   },
 
@@ -169,12 +187,20 @@ export const useTimerStore = create<TimerState>((set, get) => ({
   },
 
   stopAll: () => {
-    const { dailyWorkedSeconds, completedToday } = get();
+    const s = get();
     const result = {
-      dailyMinutes: Math.round(dailyWorkedSeconds / 60),
-      sessionsCompleted: completedToday.length,
+      dailyMinutes: Math.round(s.dailyWorkedSeconds / 60),
+      sessionsCompleted: s.completedToday.length,
+    };
+    const snapshot: TimerSnapshot = {
+      phase: s.phase, queue: s.queue, currentEntry: s.currentEntry,
+      currentIndex: s.currentIndex, secondsLeft: s.secondsLeft,
+      isRunning: s.isRunning, sessionWorkedSeconds: s.sessionWorkedSeconds,
+      dailyWorkedSeconds: s.dailyWorkedSeconds, completedToday: s.completedToday,
+      breakMinutes: s.breakMinutes,
     };
     set({
+      _snapshot: snapshot,
       phase: "idle",
       queue: [],
       currentEntry: null,
@@ -186,6 +212,12 @@ export const useTimerStore = create<TimerState>((set, get) => ({
       completedToday: [],
     });
     return result;
+  },
+
+  restore: () => {
+    const { _snapshot } = get();
+    if (!_snapshot) return;
+    set({ ..._snapshot, _snapshot: null });
   },
 
   reset: () => {

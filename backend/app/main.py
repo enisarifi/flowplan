@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import engine, Base
-from app.routers import auth, users, subjects, schedule, sessions, notes
+from app.routers import auth, users, subjects, schedule, sessions, notes, goals, resources, quiz
 
 
 @asynccontextmanager
@@ -31,6 +31,9 @@ app.include_router(subjects.router, prefix="/api/subjects", tags=["subjects"])
 app.include_router(schedule.router, prefix="/api/schedule", tags=["schedule"])
 app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])
 app.include_router(notes.router, prefix="/api/notes", tags=["notes"])
+app.include_router(goals.router, prefix="/api/goals", tags=["goals"])
+app.include_router(resources.router, prefix="/api/resources", tags=["resources"])
+app.include_router(quiz.router, prefix="/api/quiz", tags=["quiz"])
 
 
 @app.get("/health")

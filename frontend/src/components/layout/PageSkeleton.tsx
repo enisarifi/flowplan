@@ -1,6 +1,6 @@
 export default function PageSkeleton() {
   return (
-    <div className="max-w-4xl animate-pulse">
+    <div className="max-w-4xl animate-pulse animate-fade-in">
       <div className="h-7 bg-surface-200 dark:bg-surface-800 rounded-lg w-48 mb-2" />
       <div className="h-4 bg-surface-200 dark:bg-surface-800 rounded w-32 mb-8" />
       <div className="grid grid-cols-3 gap-4 mb-8">

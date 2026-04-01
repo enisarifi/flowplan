@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useSessionStats, useWeeklySummary, useExportIcal } from "@/hooks/useSchedule";
+import type { SessionStats, WeeklySummary, Subject as SubjectType } from "@/types/api";
 import { useSchedule, useGenerateSchedule, useAdaptSchedule } from "@/hooks/useSchedule";
+import { useGoals } from "@/hooks/useGoals";
 import { useSubjects } from "@/hooks/useSubjects";
 import { format, startOfDay, endOfDay, differenceInCalendarDays } from "date-fns";
 import { toast } from "sonner";
@@ -30,6 +32,7 @@ import {
   ChevronDown,
   ChevronUp,
   Timer,
+  Share2,
 } from "lucide-react";
 
 function getGreeting(hour: number) {
@@ -45,8 +48,12 @@ export default function DashboardPage() {
   const GreetingIcon = greeting.icon;
   const { data: stats, isLoading: statsLoading } = useSessionStats();
   const { data: subjects = [] } = useSubjects();
-  const { data: weeklySummary, isLoading: summaryLoading } = useWeeklySummary();
+  const { data: weeklySummary } = useWeeklySummary();
+  const [showShareCard, setShowShareCard] = useState(false);
   const exportIcal = useExportIcal();
+  const { data: goals = [] } = useGoals();
+  const activeGoals = goals.filter((g) => !g.is_completed).slice(0, 3);
+
   const loadQueue = useTimerStore((s) => s.loadQueue);
   const startSession = useTimerStore((s) => s.startSession);
   const timerPhase = useTimerStore((s) => s.phase);
@@ -168,6 +175,32 @@ export default function DashboardPage() {
           </>
         ) : null}
       </div>
+
+      {/* Goals widget */}
+      {activeGoals.length > 0 && (
+        <div className="glass rounded-2xl shadow-soft p-5 mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Target className="w-4 h-4 text-brand-500" />
+              <span className="text-sm font-display font-semibold text-[rgb(var(--foreground))]">Active Goals</span>
+            </div>
+            <a href="/goals" className="text-xs text-brand-500 hover:text-brand-600 font-semibold">View all</a>
+          </div>
+          <div className="space-y-3">
+            {activeGoals.map((goal) => (
+              <div key={goal.id}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-medium text-[rgb(var(--foreground))] truncate">{goal.title}</span>
+                  <span className="text-xs text-surface-400 shrink-0 ml-2">{Math.round(goal.progress_pct)}%</span>
+                </div>
+                <div className="h-1.5 bg-[rgb(var(--border-subtle))] rounded-full overflow-hidden">
+                  <div className="h-full bg-brand-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(goal.progress_pct, 100)}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Auto-pilot study flow */}
       {timerPhase === "idle" && todaySessions && todaySessions.filter((s) => s.status === "planned").length > 0 && (
@@ -380,7 +413,25 @@ export default function DashboardPage() {
         >
           <Download className="w-4 h-4" /> Export iCal
         </button>
+        {stats && (
+          <button
+            onClick={() => setShowShareCard(true)}
+            className="inline-flex items-center gap-2 border border-[rgb(var(--border-strong))] text-[rgb(var(--foreground))] hover:border-brand-300 dark:hover:border-brand-700 px-6 py-3 rounded-xl text-sm font-semibold transition-all shadow-soft hover:shadow-medium"
+          >
+            <Share2 className="w-4 h-4" /> Share progress
+          </button>
+        )}
       </div>
+
+      {showShareCard && stats && (
+        <ShareCardModal
+          user={user}
+          stats={stats}
+          weeklySummary={weeklySummary ?? null}
+          subjects={subjects}
+          onClose={() => setShowShareCard(false)}
+        />
+      )}
     </div>
   );
 }
@@ -404,6 +455,98 @@ function MiniStat({ label, value }: { label: string; value: string }) {
     <div className="text-center py-2 px-3 rounded-xl bg-[rgb(var(--surface-raised))]">
       <p className="text-lg font-display font-bold text-[rgb(var(--foreground))]">{value}</p>
       <p className="text-xs text-surface-400">{label}</p>
+    </div>
+  );
+}
+
+function ShareCardModal({ user, stats, weeklySummary, subjects, onClose }: {
+  user: ReturnType<typeof useAppStore<any>> | null;
+  stats: SessionStats;
+  weeklySummary: WeeklySummary | null;
+  subjects: SubjectType[];
+  onClose: () => void;
+}) {
+  const copied = useState(false);
+  const [isCopied, setIsCopied] = copied;
+
+  const text = [
+    `📚 FlowPlan Weekly Progress`,
+    ``,
+    `✅ ${stats.completed_sessions} sessions completed`,
+    `📈 ${stats.completion_rate}% completion rate`,
+    weeklySummary ? `⏱ ${weeklySummary.total_hours_studied}h studied this week` : "",
+    stats.avg_energy_rating ? `⚡ Avg energy: ${stats.avg_energy_rating}/5` : "",
+    subjects.length > 0 ? `📖 Subjects: ${subjects.map((s) => s.name).join(", ")}` : "",
+    ``,
+    `#FlowPlan #StudySmart`,
+  ].filter(Boolean).join("\n");
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text);
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+      <div className="w-full max-w-sm mx-4 animate-fade-up" onClick={(e) => e.stopPropagation()}>
+        {/* Card preview */}
+        <div className="relative bg-gradient-to-br from-brand-600 to-brand-800 rounded-2xl p-6 mb-3 overflow-hidden shadow-heavy">
+          <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_20%_80%,white,transparent_50%)]" />
+          <div className="relative">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center">
+                <Brain className="w-4 h-4 text-white" />
+              </div>
+              <span className="text-white font-display font-bold">FlowPlan</span>
+            </div>
+            {user && <p className="text-white/70 text-xs mb-3">{user.display_name}</p>}
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="bg-white/10 rounded-xl p-3">
+                <p className="text-white/60 text-xs mb-1">Sessions</p>
+                <p className="text-white text-2xl font-display font-bold">{stats.completed_sessions}</p>
+              </div>
+              <div className="bg-white/10 rounded-xl p-3">
+                <p className="text-white/60 text-xs mb-1">Rate</p>
+                <p className="text-white text-2xl font-display font-bold">{stats.completion_rate}%</p>
+              </div>
+              {weeklySummary && (
+                <div className="bg-white/10 rounded-xl p-3">
+                  <p className="text-white/60 text-xs mb-1">Hours</p>
+                  <p className="text-white text-2xl font-display font-bold">{weeklySummary.total_hours_studied}h</p>
+                </div>
+              )}
+              {stats.avg_energy_rating && (
+                <div className="bg-white/10 rounded-xl p-3">
+                  <p className="text-white/60 text-xs mb-1">Energy</p>
+                  <p className="text-white text-2xl font-display font-bold">{stats.avg_energy_rating}/5</p>
+                </div>
+              )}
+            </div>
+            {subjects.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {subjects.slice(0, 4).map((s) => (
+                  <span key={s.id} className="px-2 py-0.5 bg-white/15 rounded-full text-white/80 text-xs">{s.name}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-2">
+          <button
+            onClick={handleCopy}
+            className="flex-1 inline-flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl py-3 text-sm font-semibold transition-all"
+          >
+            <Share2 className="w-4 h-4" />
+            {isCopied ? "Copied!" : "Copy text"}
+          </button>
+          <button onClick={onClose} className="px-4 py-3 rounded-xl border border-[rgb(var(--border-subtle))] text-sm text-surface-400 hover:text-[rgb(var(--foreground))] transition-colors">
+            Close
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

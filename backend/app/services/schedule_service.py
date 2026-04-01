@@ -39,7 +39,19 @@ class ScheduleService:
         today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         await self.schedule_repo.delete_future_planned(user_id, today_start)
 
-        parsed, prompt_tokens, completion_tokens = await self.ai_service.generate_schedule(prefs, subjects, start_date)
+        # Spaced repetition: calculate days since last study per subject
+        all_entries = await self.schedule_repo.get_all_entries_for_stats(user_id)
+        last_studied: dict[str, int] = {}
+        now = datetime.now(timezone.utc)
+        for s in subjects:
+            completed = [e for e in all_entries if e.subject_id == s.id and e.status == "completed"]
+            if completed:
+                latest = max(e.start_time for e in completed)
+                last_studied[s.name] = (now - latest).days
+            else:
+                last_studied[s.name] = -1
+
+        parsed, prompt_tokens, completion_tokens = await self.ai_service.generate_schedule(prefs, subjects, start_date, last_studied)
 
         log = AIGenerationLog(
             user_id=user_id,

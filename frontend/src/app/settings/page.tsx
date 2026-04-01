@@ -7,13 +7,13 @@ import api from "@/lib/api";
 import { UserPreferences } from "@/types/api";
 import { useAppStore } from "@/store/useAppStore";
 import { toast } from "sonner";
-import { Settings, Save, Clock, Timer, Palette, Sun, Moon, Bell } from "lucide-react";
+import { Settings, Save, Clock, Timer, Palette, Sun, Moon, Bell, User, AlertTriangle } from "lucide-react";
 import { requestPermission } from "@/lib/notifications";
 
 const inputClass = "w-full border border-[rgb(var(--border-subtle))] bg-[rgb(var(--surface))] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 text-[rgb(var(--foreground))] transition-all";
 const labelClass = "block text-sm font-medium text-[rgb(var(--foreground))] mb-1.5";
 
-type Tab = "study" | "timer" | "appearance";
+type Tab = "study" | "timer" | "appearance" | "account";
 
 export default function SettingsPage() {
   const qc = useQueryClient();
@@ -22,6 +22,13 @@ export default function SettingsPage() {
   const [tab, setTab] = useState<Tab>("study");
   const [notifEnabled, setNotifEnabled] = useState(false);
   const [reminderMin, setReminderMin] = useState(5);
+
+  const { logout, user, setUser } = useAppStore((s) => ({ logout: s.logout, user: s.user, setUser: s.setUser }));
+  const [displayName, setDisplayName] = useState(user?.display_name || "");
+  const [emailForm, setEmailForm] = useState({ email: "", password: "" });
+  const [passwordForm, setPasswordForm] = useState({ old_password: "", new_password: "", confirm: "" });
+  const [deleteConfirm, setDeleteConfirm] = useState({ text: "", password: "" });
+  const [showDeleteZone, setShowDeleteZone] = useState(false);
 
   const { data: prefs, isLoading } = useQuery({
     queryKey: ["preferences"],
@@ -72,10 +79,44 @@ export default function SettingsPage() {
     localStorage.setItem("notif_reminder_min", String(val));
   };
 
+  const updateName = useMutation({
+    mutationFn: async (name: string) => {
+      const res = await api.put("/users/me", { display_name: name });
+      return res.data;
+    },
+    onSuccess: (data) => { setUser(data); toast.success("Name updated!"); },
+    onError: () => toast.error("Failed to update name."),
+  });
+
+  const updateEmail = useMutation({
+    mutationFn: async () => {
+      await api.patch("/users/me/email", { new_email: emailForm.email, password: emailForm.password });
+    },
+    onSuccess: () => { toast.success("Email updated!"); setEmailForm({ email: "", password: "" }); },
+    onError: () => toast.error("Failed to update email. Check your password."),
+  });
+
+  const updatePassword = useMutation({
+    mutationFn: async () => {
+      await api.patch("/users/me/password", { old_password: passwordForm.old_password, new_password: passwordForm.new_password });
+    },
+    onSuccess: () => { toast.success("Password updated!"); setPasswordForm({ old_password: "", new_password: "", confirm: "" }); },
+    onError: () => toast.error("Failed to update password. Check your current password."),
+  });
+
+  const deleteAccount = useMutation({
+    mutationFn: async () => {
+      await api.delete("/users/me", { data: { password: deleteConfirm.password } });
+    },
+    onSuccess: () => { toast.success("Account deleted."); logout(); },
+    onError: () => toast.error("Failed to delete account. Check your password."),
+  });
+
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: "study", label: "Study", icon: <Clock className="w-4 h-4" /> },
     { key: "timer", label: "Timer", icon: <Timer className="w-4 h-4" /> },
     { key: "appearance", label: "Appearance", icon: <Palette className="w-4 h-4" /> },
+    { key: "account", label: "Account", icon: <User className="w-4 h-4" /> },
   ];
 
   if (isLoading) {
@@ -207,6 +248,129 @@ export default function SettingsPage() {
               {update.isPending ? "Saving..." : "Save timer preferences"}
             </button>
           </form>
+        </div>
+      )}
+
+      {/* Account Tab */}
+      {tab === "account" && (
+        <div className="space-y-4 animate-fade-up">
+          {/* Display name */}
+          <div className="glass rounded-2xl shadow-soft p-6 space-y-4">
+            <h3 className="text-sm font-display font-semibold text-[rgb(var(--foreground))]">Display name</h3>
+            <div className="flex gap-3">
+              <input
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Your name"
+                className={inputClass}
+              />
+              <button
+                onClick={() => updateName.mutate(displayName)}
+                disabled={updateName.isPending || !displayName.trim()}
+                className="shrink-0 bg-brand-500 hover:bg-brand-600 text-white rounded-xl px-5 text-sm font-semibold transition-all disabled:opacity-60"
+              >
+                {updateName.isPending ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+
+          {/* Change email */}
+          <div className="glass rounded-2xl shadow-soft p-6 space-y-3">
+            <h3 className="text-sm font-display font-semibold text-[rgb(var(--foreground))]">Change email</h3>
+            <input
+              type="email"
+              value={emailForm.email}
+              onChange={(e) => setEmailForm((f) => ({ ...f, email: e.target.value }))}
+              placeholder="New email address"
+              className={inputClass}
+            />
+            <input
+              type="password"
+              value={emailForm.password}
+              onChange={(e) => setEmailForm((f) => ({ ...f, password: e.target.value }))}
+              placeholder="Confirm with your password"
+              className={inputClass}
+            />
+            <button
+              onClick={() => updateEmail.mutate()}
+              disabled={updateEmail.isPending || !emailForm.email || !emailForm.password}
+              className="w-full bg-brand-500 hover:bg-brand-600 text-white rounded-xl py-2.5 text-sm font-semibold transition-all disabled:opacity-60"
+            >
+              {updateEmail.isPending ? "Updating..." : "Update email"}
+            </button>
+          </div>
+
+          {/* Change password */}
+          <div className="glass rounded-2xl shadow-soft p-6 space-y-3">
+            <h3 className="text-sm font-display font-semibold text-[rgb(var(--foreground))]">Change password</h3>
+            <input
+              type="password"
+              value={passwordForm.old_password}
+              onChange={(e) => setPasswordForm((f) => ({ ...f, old_password: e.target.value }))}
+              placeholder="Current password"
+              className={inputClass}
+            />
+            <input
+              type="password"
+              value={passwordForm.new_password}
+              onChange={(e) => setPasswordForm((f) => ({ ...f, new_password: e.target.value }))}
+              placeholder="New password"
+              className={inputClass}
+            />
+            <input
+              type="password"
+              value={passwordForm.confirm}
+              onChange={(e) => setPasswordForm((f) => ({ ...f, confirm: e.target.value }))}
+              placeholder="Confirm new password"
+              className={inputClass}
+            />
+            <button
+              onClick={() => updatePassword.mutate()}
+              disabled={updatePassword.isPending || !passwordForm.old_password || !passwordForm.new_password || passwordForm.new_password !== passwordForm.confirm}
+              className="w-full bg-brand-500 hover:bg-brand-600 text-white rounded-xl py-2.5 text-sm font-semibold transition-all disabled:opacity-60"
+            >
+              {updatePassword.isPending ? "Updating..." : "Update password"}
+            </button>
+            {passwordForm.new_password && passwordForm.confirm && passwordForm.new_password !== passwordForm.confirm && (
+              <p className="text-xs text-red-500">Passwords don&apos;t match</p>
+            )}
+          </div>
+
+          {/* Danger zone */}
+          <div className="glass rounded-2xl shadow-soft p-6 space-y-3 border border-red-200 dark:border-red-900/50">
+            <button
+              onClick={() => setShowDeleteZone((v) => !v)}
+              className="flex items-center gap-2 text-sm font-semibold text-red-500 hover:text-red-600 w-full"
+            >
+              <AlertTriangle className="w-4 h-4" />
+              Delete account
+            </button>
+            {showDeleteZone && (
+              <div className="space-y-3 pt-2 animate-fade-up">
+                <p className="text-xs text-surface-400">This will permanently delete your account and all data. Type <strong>DELETE</strong> to confirm.</p>
+                <input
+                  value={deleteConfirm.text}
+                  onChange={(e) => setDeleteConfirm((f) => ({ ...f, text: e.target.value }))}
+                  placeholder="Type DELETE"
+                  className={inputClass}
+                />
+                <input
+                  type="password"
+                  value={deleteConfirm.password}
+                  onChange={(e) => setDeleteConfirm((f) => ({ ...f, password: e.target.value }))}
+                  placeholder="Your password"
+                  className={inputClass}
+                />
+                <button
+                  onClick={() => deleteAccount.mutate()}
+                  disabled={deleteAccount.isPending || deleteConfirm.text !== "DELETE" || !deleteConfirm.password}
+                  className="w-full bg-red-500 hover:bg-red-600 text-white rounded-xl py-2.5 text-sm font-semibold transition-all disabled:opacity-60"
+                >
+                  {deleteAccount.isPending ? "Deleting..." : "Permanently delete account"}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

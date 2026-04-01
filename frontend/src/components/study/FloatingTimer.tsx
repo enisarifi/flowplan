@@ -7,8 +7,10 @@ import { toast } from "sonner";
 import {
   Play, Pause, Square, RotateCcw, Timer, Coffee,
   ChevronUp, ChevronDown, X, SkipForward, Star,
-  CheckCircle2, PartyPopper,
+  CheckCircle2, PartyPopper, Maximize2,
 } from "lucide-react";
+import dynamic from "next/dynamic";
+const FocusMode = dynamic(() => import("./FocusMode"), { ssr: false });
 
 export default function FloatingTimer() {
   const store = useTimerStore();
@@ -20,6 +22,7 @@ export default function FloatingTimer() {
 
   const completeSession = useCompleteSession();
   const [expanded, setExpanded] = useState(true);
+  const [focusMode, setFocusMode] = useState(false);
   const [energy, setEnergy] = useState(3);
   const [difficulty, setDifficulty] = useState(3);
   const [completionPct, setCompletionPct] = useState(100);
@@ -32,6 +35,7 @@ export default function FloatingTimer() {
   }, [isRunning, tick]);
 
   if (phase === "idle") return null;
+  if (focusMode) return <FocusMode onExit={() => setFocusMode(false)} />;
 
   const minutes = Math.floor(secondsLeft / 60);
   const seconds = secondsLeft % 60;
@@ -42,9 +46,19 @@ export default function FloatingTimer() {
 
   const handleStop = () => {
     const { dailyMinutes, sessionsCompleted } = stopAll();
-    if (dailyMinutes > 0) {
-      toast.success(`Session ended. You studied for ${dailyMinutes}m today (${sessionsCompleted} session${sessionsCompleted !== 1 ? "s" : ""}).`);
-    }
+    toast.success(
+      `Session ended. ${dailyMinutes > 0 ? `You studied for ${dailyMinutes}m today (${sessionsCompleted} session${sessionsCompleted !== 1 ? "s" : ""}).` : ""}`,
+      {
+        duration: 6000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            useTimerStore.getState().restore();
+            toast.info("Timer restored.");
+          },
+        },
+      }
+    );
   };
 
   const handleSubmitFeedback = async () => {
@@ -99,7 +113,7 @@ export default function FloatingTimer() {
           <button onClick={() => setExpanded(false)} className="p-1 rounded-lg hover:bg-[rgb(var(--surface-raised))] transition-colors">
             <ChevronDown className="w-4 h-4 text-surface-400" />
           </button>
-          <button onClick={handleStop} className="p-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20 hover:text-red-500 transition-colors text-surface-400">
+          <button onClick={handleStop} title="End session" className="p-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20 hover:text-red-500 transition-colors text-surface-400">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -122,6 +136,9 @@ export default function FloatingTimer() {
             <div className="flex justify-center gap-2">
               <button onClick={togglePause} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all bg-[rgb(var(--surface-raised))] text-[rgb(var(--foreground))]">
                 {isRunning ? <><Pause className="w-3.5 h-3.5" /> Pause</> : <><Play className="w-3.5 h-3.5" /> Resume</>}
+              </button>
+              <button onClick={() => setFocusMode(true)} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold text-brand-500 hover:bg-brand-50 dark:hover:bg-brand-950/30 transition-all" title="Focus mode">
+                <Maximize2 className="w-3.5 h-3.5" />
               </button>
               <button onClick={skipToNext} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold text-surface-400 hover:text-surface-600 transition-all">
                 <SkipForward className="w-3.5 h-3.5" /> Skip

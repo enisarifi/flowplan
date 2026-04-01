@@ -1,17 +1,20 @@
 import logging
-from datetime import datetime
+import uuid
+from datetime import datetime, date as date_type
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 logger = logging.getLogger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.database import get_db
 from app.dependencies import get_current_user, get_schedule_repo
 from app.models.user import User
+from app.models.subject import Subject
 from app.repositories.schedule_repo import ScheduleRepository
 from app.services.schedule_service import ScheduleService
-from app.services.ai_service import AIResponseValidationError
+from app.services.ai_service import AIResponseValidationError, AIService
 from app.schemas.schedule import ScheduleEntryResponse, GenerateScheduleRequest
 
 router = APIRouter()
@@ -117,3 +120,41 @@ async def export_ical(
         media_type="text/calendar",
         headers={"Content-Disposition": "attachment; filename=flowplan-schedule.ics"},
     )
+
+
+@router.get("/exam-prep/{subject_id}")
+async def get_exam_prep(
+    subject_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Subject).where(Subject.id == subject_id, Subject.user_id == current_user.id)
+    )
+    subject = result.scalar_one_or_none()
+    if not subject:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    if not subject.exam_date:
+        raise HTTPException(status_code=400, detail="No exam date set for this subject")
+
+    days_until = (subject.exam_date - date_type.today()).days
+    if days_until < 0:
+        raise HTTPException(status_code=400, detail="Exam date has passed")
+
+    ai = AIService()
+    try:
+        prep = await ai.generate_exam_prep(subject.name, subject.difficulty, days_until, subject.notes)
+    except Exception:
+        prep = {
+            "checklist": ["Review all notes", "Practice past exams", "Focus on weak areas"],
+            "daily_hours": 2.0,
+            "priority": "high",
+            "tips": ["Start with the hardest topics first", "Take breaks every 45 minutes"],
+        }
+
+    return {
+        "subject_name": subject.name,
+        "exam_date": str(subject.exam_date),
+        "days_until": days_until,
+        **prep,
+    }

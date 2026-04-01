@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAppStore } from "@/store/useAppStore";
@@ -18,6 +18,9 @@ import {
   GraduationCap,
   FileText,
   History,
+  Target,
+  Loader2,
+  BrainCircuit,
 } from "lucide-react";
 
 const links = [
@@ -25,6 +28,8 @@ const links = [
   { href: "/schedule", label: "Schedule", icon: Calendar },
   { href: "/subjects", label: "Subjects", icon: BookOpen },
   { href: "/notes", label: "Notes", icon: FileText },
+  { href: "/quiz", label: "Quiz", icon: BrainCircuit },
+  { href: "/goals", label: "Goals", icon: Target },
   { href: "/progress", label: "Progress", icon: TrendingUp },
   { href: "/history", label: "History", icon: History },
   { href: "/settings", label: "Settings", icon: Settings },
@@ -37,6 +42,11 @@ export default function Sidebar() {
   const darkMode = useAppStore((s) => s.darkMode);
   const toggleDarkMode = useAppStore((s) => s.toggleDarkMode);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPendingHref(null);
+  }, [pathname]);
 
   const navContent = (
     <>
@@ -59,7 +69,7 @@ export default function Sidebar() {
             <Link
               key={href}
               href={href}
-              onClick={() => setMobileOpen(false)}
+              onClick={() => { setMobileOpen(false); if (!active) setPendingHref(href); }}
               className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
                 active
                   ? "bg-brand-50 text-brand-600 dark:bg-brand-950/60 dark:text-brand-300 shadow-soft"
@@ -69,7 +79,7 @@ export default function Sidebar() {
               {active && (
                 <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-brand-500 rounded-full" />
               )}
-              <Icon className="w-[18px] h-[18px]" />
+              {pendingHref === href ? <Loader2 className="w-[18px] h-[18px] animate-spin" /> : <Icon className="w-[18px] h-[18px]" />}
               {label}
             </Link>
           );
